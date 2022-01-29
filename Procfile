@@ -1,0 +1,1 @@
+web: gunicorn canelo_software.wsgi --log-file -
