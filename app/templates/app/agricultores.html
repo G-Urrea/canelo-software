@@ -1,0 +1,66 @@
+{% extends 'app/base.html' %}
+
+{% block content %}
+
+<br>
+
+{% for message in messages %}
+
+<div class="alert alert-success" role="alert">
+    {{ message }}
+</div>
+
+{% endfor %}
+
+<div class="row">
+    <div class="col-md-12">
+        <h5>AGRICULTORES</h5>
+        <hr>
+        <div class="card card-body">
+            <h5>Filtrar:</h5>
+			<form method="GET">
+                Comuna: {{ filtro_agricultor.form.comuna }}
+                Región Propia: {{ filtro_agricultor.form.comuna__region }}
+                Regiónes de Interes: {{ filtro_agricultor.form.region_interes }}
+                Producto: {{ filtro_agricultor.form.productos }}
+		    <button class="btn btn-primary" type="submit">Filtrar</button>
+		  </form>
+
+		</div>
+        <div class="card card-body">
+            <a class="btn btn-primary btn-sm btn-block" href="{% url 'agricultor_add' %}">Agregar Agricultor +</a>
+            <table class="table table-sm">
+                <tr>
+                    <th></th>
+                    <th>Nombre</th>
+                    <th>Telefono</th>
+                    <th>Región</th>
+                    <th>Comuna</th>
+                    <th>Productos</th>
+                    <th>Regiones de Interes</th>
+                </tr>
+                {% for agricultor in all_agricultores %}
+                <tr>
+                    <td><a class="btn btn-sm btn-primary" href="{% url 'agricultor_edit' agricultor.id %}">Editar</a></td>
+                    <td>{{ agricultor.nombres }} {{ agricultor.apellidos }}</td>
+                    <td>{{ agricultor.telefono }}</td>
+                    <td>{{ agricultor.comuna.region }}</td>
+                    <td>{{ agricultor.comuna }}</td>
+                    <td>
+                    {% for producto in agricultor.productos.all %}
+                        {{ producto.nombre }}, 
+                    {% endfor %}
+                    </td>
+                    <td>
+                        {% for region in agricultor.region_interes.all %}
+                            {{ region.nombre }},  
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
