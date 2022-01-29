@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from app.models import Region, Comuna, Mercado, Producto, Variedad, Agricultor, Precio, ActualizacionPrecio
+from .models import Region, Comuna, Mercado, Producto, Variedad, Agricultor, Precio, ActualizacionPrecio
 
 admin.site.register(Region)
 admin.site.register(Comuna)
