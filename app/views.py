@@ -172,10 +172,11 @@ def get_data_precios_agicolas(a_region, a_producto):
 
 #funcion auxiliar que obtiene los precios de todos los productos ganaderos en un mercado
 def get_data_precios_ganaderos(a_mercado):
-    precios = get_latest_precios().filter(variedad__producto__tipo='ganadero')
     lista_precios = []
-    if precios.filter(mercado=a_mercado).exists():
-        lista_precios = precios.filter(mercado=a_mercado)
+    for variedad in Variedad.objects.all():
+        if Precio.objects.filter(variedad=variedad, mercado=a_mercado).exists():
+            precio = Precio.objects.filter(variedad=variedad, mercado=a_mercado).latest('fecha_subida')
+            lista_precios.append(precio)
     return lista_precios
 
 #funcion auxiliar que obtiene los precios mas recientes de todos las variedades de productos
