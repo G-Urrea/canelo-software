@@ -24,7 +24,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = 'wwwd6_mgkk1f2^(deyg@8cx1%$%3q+k8pk4t99x6m%i9-@jz)_'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ['canelosoftware.herokuapp.com', '127.0.0.1']
 
