@@ -40,5 +40,5 @@ def load_all_reg_com_mer(path):
 
 
 if __name__ == "__main__":
-    path = 'static\\media\\regiones_comunas_mercados.xlsx'
+    path = 'static/media/regiones_comunas_mercados.xlsx'
     load_all_reg_com_mer(path)
