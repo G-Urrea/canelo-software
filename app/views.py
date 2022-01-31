@@ -1,3 +1,4 @@
+from itertools import product
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.template import loader
@@ -97,7 +98,7 @@ def precios(request):
             tipo = form.cleaned_data.get('tipo')
             messages.success(request, 'Se actualizo correctamente los precios ' + tipo + 's')
             return redirect('precios')
-    precios = get_latest_precios()
+    precios = Precio.objects.all()
     precios_agricolas = precios.filter(variedad__producto__tipo='agricola')
     precios_ganaderos = precios.filter(variedad__producto__tipo='ganadero')
     filtro_agricolas = PrecioFilter(request.GET, queryset=precios_agricolas)
@@ -161,30 +162,22 @@ def get_data_precios_agicolas(a_region, a_producto):
     variedades = Variedad.objects.filter(producto=a_producto)
     lista_mercado_precios = []
     for a_mercado in mercados:
-        lista_precios = []
-        for a_variedad in variedades:
-            if Precio.objects.filter(mercado=a_mercado,variedad=a_variedad).exists():
-                a_precio = Precio.objects.filter(mercado=a_mercado,variedad=a_variedad).latest('fecha_subida')
-                lista_precios.append(a_precio)
-        if len(lista_precios) > 0:
-            lista_mercado_precios.append([a_mercado, lista_precios])
+        precios = Precio.objects.filter(mercado=a_mercado, variedad__in=variedades)
+        print(precios)
+        if len(precios) > 0:
+            lista_mercado_precios.append([a_mercado, precios])
     return lista_mercado_precios
 
 #funcion auxiliar que obtiene los precios de todos los productos ganaderos en un mercado
 def get_data_precios_ganaderos(a_mercado):
-    lista_precios = []
-    for variedad in Variedad.objects.all():
-        if Precio.objects.filter(variedad=variedad, mercado=a_mercado).exists():
-            precio = Precio.objects.filter(variedad=variedad, mercado=a_mercado).latest('fecha_subida')
-            lista_precios.append(precio)
-    return lista_precios
-
+    precios = Precio.objects.filter(mercado=a_mercado)
+    return precios
 #funcion auxiliar que obtiene los precios mas recientes de todos las variedades de productos
-def get_latest_precios():
-    precios = set()
-    for variedad in Variedad.objects.all():
-        for mercado in Mercado.objects.all():
-            if Precio.objects.filter(variedad=variedad, mercado=mercado).exists():
-                precio = Precio.objects.filter(variedad=variedad, mercado=mercado).latest('fecha_subida')
-                precios.add(precio.pk)
-    return Precio.objects.filter(pk__in=precios)
+# def get_latest_precios():
+#     precios = set()
+#     for variedad in Variedad.objects.all():
+#         for mercado in Mercado.objects.all():
+#             if Precio.objects.filter(variedad=variedad, mercado=mercado).exists():
+#                 precio = Precio.objects.filter(variedad=variedad, mercado=mercado).latest('fecha_subida')
+#                 precios.add(precio.pk)
+#     return Precio.objects.filter(pk__in=precios)

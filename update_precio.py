@@ -54,7 +54,15 @@ def update_precio_agricola(a_mercado, a_producto, a_variedad, a_calidad, a_preci
     else:
         variedad = app.models.Variedad.objects.get(nombre=a_variedad, calidad=a_calidad, producto=producto)
 
-    app.models.Precio.objects.create(variedad=variedad, mercado=mercado, precio_minimo=a_precio_minimo, precio_maximo=a_precio_maximo, unidad=a_unidad_comercializacion, fecha_subida=a_fecha_subida)
+    #el codigo comentado guarda el nuevo precio para una variedad en un mercado como un objeto independiente de el anteriormente guardado, debido a las limitaciones de filas en heroku no se utilizó
+    #app.models.Precio.objects.create(variedad=variedad, mercado=mercado, precio_minimo=a_precio_minimo, precio_maximo=a_precio_maximo, unidad=a_unidad_comercializacion, fecha_subida=a_fecha_subida)
+
+    if not app.models.Precio.objects.filter(variedad=variedad, mercado=mercado).exists():
+        app.models.Precio.objects.create(variedad=variedad, mercado=mercado, precio_minimo=a_precio_minimo, precio_maximo=a_precio_maximo, unidad=a_unidad_comercializacion, fecha_subida=a_fecha_subida)
+    else:
+        precio = app.models.Precio.objects.filter(variedad=variedad, mercado=mercado)
+        precio.update(precio_minimo=a_precio_minimo, precio_maximo=a_precio_maximo, unidad=a_unidad_comercializacion, fecha_subida=a_fecha_subida)
+
     return
 
 #funcion que actualiza en la base de datos todos los precios agricolas
@@ -124,7 +132,16 @@ def update_precio_ganadero(a_feria_comuna, a_ganado, a_variedad, a_precio_promed
         variedad = app.models.Variedad.objects.create(nombre=a_variedad, producto=producto)
     else:
         variedad = app.models.Variedad.objects.get(nombre=a_variedad, producto=producto)
-    app.models.Precio.objects.create(variedad=variedad, mercado=mercado, precio_promedio=a_precio_promedio, numero_cabezas=a_numero_cabezas, fecha_subida=a_fecha_subida)
+
+    #el codigo comentado guarda el nuevo precio para una variedad en un mercado como un objeto independiente de el anteriormente guardado, debido a las limitaciones de filas en heroku no se utilizó
+    #app.models.Precio.objects.create(variedad=variedad, mercado=mercado, precio_promedio=a_precio_promedio, numero_cabezas=a_numero_cabezas, fecha_subida=a_fecha_subida)
+
+    if not app.models.Precio.objects.filter(variedad=variedad, mercado=mercado).exists():
+        app.models.Precio.objects.create(variedad=variedad, mercado=mercado, precio_promedio=a_precio_promedio, numero_cabezas=a_numero_cabezas, fecha_subida=a_fecha_subida)
+    else:
+        precio = app.models.Precio.objects.filter(variedad=variedad, mercado=mercado)
+        precio.update(precio_promedio=a_precio_promedio, numero_cabezas=a_numero_cabezas, fecha_subida=a_fecha_subida)
+
     return
 
 #funcion que actualiza en la base de datos todos los precios ganaderos
