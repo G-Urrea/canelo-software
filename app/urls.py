@@ -11,4 +11,5 @@ urlpatterns = [
     path('agricultores/<int:agricultor_id>/editar/', views.agricultor_edit, name='agricultor_edit'),
     path('precios/', views.precios, name='precios'),
     path('generar_tablas/', views.generar_tablas, name='generar_tablas'),
+    path('generar_pronosticos', views.generar_pronosticos, name='generar_pronosticos'),
 ]

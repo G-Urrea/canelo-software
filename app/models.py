@@ -1,6 +1,7 @@
 from django.db import models
 from django.db.models.fields import BooleanField, DateField, DateTimeField, IntegerField
 from django.db.models.fields.related import ForeignKey, ManyToManyField
+import datetime
 
 from update_precio import update_all_precios_agricolas, update_all_precios_ganaderos
 
@@ -101,6 +102,18 @@ class Precio(models.Model):
     precio_promedio = models.IntegerField(blank=True, null=True) #solo ganaderos
     numero_cabezas = models.IntegerField(blank=True, null=True) #solo ganaderos
     fecha_subida = models.DateField()
+
+    def save(self, *args, **kwargs):
+        #if self.up_to_date!= None:
+        super(Precio, self).save(*args, **kwargs)
+
+    # Para saber si un precio está al día
+    @property
+    def up_to_date(self):
+        fecha_reciente = self.fecha_subida.date()
+        hoy = datetime.date(datetime.date.today())
+        return fecha_reciente<hoy
+
     def __str__(self):
         if self.precio_promedio is None:
             return '{} > {}: {} - {}'.format(str(self.mercado), str(self.variedad), self.precio_minimo, self.precio_maximo)

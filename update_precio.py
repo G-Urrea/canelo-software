@@ -4,6 +4,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'canelo_sofware.settings')
 
 import app.models
 import pandas as pd
+import unicodedata
 
 
 #Script para actualizar los precios de las variedades de productos en la base de datos a partir de los excels extraidos de ODEPA
@@ -23,17 +24,40 @@ def splitter(a_string, tipo):
     else:
       return ' '.join(producto_variedad[1:])
 
+# Para quitar acentos
+def strip_accents(s):
+   return ''.join(c for c in unicodedata.normalize('NFD', s)
+                  if unicodedata.category(c) != 'Mn')
+
+# Para procesar el texto de las columnas al formato de las tablas
+def procesar_columnas(x):
+  x = x.lower()
+  x = '_'.join(x.split())
+  return strip_accents(x)
+
 #funcion auxiliar que deja en un formato trabajable el archivo excel de precios de productos agricolas entregandolo como un dataframe de pandas
 def formatear_precios_agricolas(path):
   precios = pd.read_excel(
       path,
-      header=None,
-      names=['mercado','producto','variedad','calidad','volumen','precio_minimo','precio_maximo','precio_promedio_ponderado','unidad_comercializacion']
+      header=0,
+      skiprows = 5,
+      skipfooter = 1,
+      engine='openpyxl'
       )
-  precios = precios[6:][:-1] #en la fila 6 comienzan los productos y la ultima fila es la fuente
-  precios = precios.drop(['volumen','precio_promedio_ponderado'], axis=1) #elimina las columnas que no sirven
-
-  precios['variedad'].replace({"Sin especificar": ""}, inplace=True) #se quitan las variedades sin especificar
+  
+  # Mapeo con los nombres de columnas procesados
+  mapping = dict(zip(precios.columns, list(map(procesar_columnas, precios.columns))))
+  # Caso excepcional
+  mapping['Unidad de comercialización'] = 'unidad_comercializacion'
+  # Renombrar columnas
+  precios.rename(columns=mapping, inplace=True)
+  
+  # Información que irá en las tablas
+  valid_info = ['mercado','producto','variedad','calidad',
+                'precio_minimo','precio_maximo','unidad_comercializacion']
+  precios = precios[valid_info]
+  # Se quitan las variedades sin especificar
+  precios['variedad'].replace({"Sin especificar": ""}, inplace=True) 
 
   return precios
 

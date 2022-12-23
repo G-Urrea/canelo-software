@@ -7,15 +7,24 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
+from django.core.files.storage import default_storage
 
 import unidecode
 import json
+import pandas as pd
+import app.utils.pronostico as pronosticos
+from datetime import datetime
+import pytz
+import os
+import base64
 
 from .models import Agricultor, Precio, Mercado, Producto, Region, Variedad
 from .forms import AgricultorForm, ActualizacionPrecioForm
 from .filters import PrecioFilter, AgricultorFilter
 
 #vista para iniciar sesión como administrador
+pd.options.mode.chained_assignment = None
 def iniciar_sesion(request):
     if request.user.is_authenticated:
         return redirect('index')
@@ -114,55 +123,152 @@ def precios(request):
     }
     return render(request, 'app/precios.html', context)
 
+@csrf_exempt
+def generar_pronosticos(request):
+    # Archivo debe estar en path/media
+    path = settings.MEDIA_ROOT
+    
+    if request.method == "GET":
+        # Ver fecha
+        hoy = datetime.now(pytz.timezone('America/Santiago')).date()
+        nombre_archivo = f"pronostico_{hoy}.csv"
+        
+
+        # Generar df sólo una vez al día
+        # Si no existe, se recopilan los datos
+        if not os.path.exists(f'{path}/{nombre_archivo}'):
+            df = pronosticos.get_pronosticos()
+            df.to_csv(f'{path}/{nombre_archivo}', encoding='utf-8', index=False)
+        else:
+            print('Estaba el archivo! :D')
+            df = pd.read_csv(f'{path}/{nombre_archivo}',encoding='utf-8')
+            df.fillna('', inplace=True)
+
+        print(default_storage.exists('static/media'))
+    
+    
+        tables = pronosticos.get_tablas_pronostico(df)
+        ciudades = {}
+
+        # Verificar que están los iconos y si no, actualizarlos
+        pronosticos.actualizar_imagenes(df, f'{path}/iconos_pronostico')
+
+        for ciudad in tables:
+
+            # Formatear temperatura para tablas
+            temp = tables[ciudad]['temperatura'].apply(lambda y : pronosticos.format_temperatura(y) ).copy()
+            tables[ciudad]['temperatura'] = temp
+
+            temp = tables[ciudad]['fecha'].copy().apply(lambda x: "<br>".join(x.split(' ')))
+            tables[ciudad]['fecha'] = temp
+
+            json_records = tables[ciudad].reset_index().to_json(orient ='records', force_ascii=False)
+            data = json.loads(json_records)
+            ciudades[ciudad] = data
+            context = {
+                'ciudades':ciudades,
+                'lista_ciudades': json.dumps(list(ciudades.keys()))
+                }
+        return render(request, 'app/generar_pronostico.html', context)
+
+    if request.method == 'POST':
+         # Dejar imagenes en url, todas las tablas en una carpeta
+        try:
+            name = request.POST.get('name')
+            img = request.POST.get('image')
+
+            if not os.path.exists(f'{path}/pronosticos'):
+                os.makedirs(f'{path}/pronosticos')
+
+            
+            with open(f'{path}/pronosticos/{name}', "wb") as fh:
+                        fh.write(base64.b64decode(img))
+
+        except Exception as e:
+            print('Error:')
+            print(e)
+            print('Fallaste wachin')
+
+            return HttpResponse('400')
+        
+        return HttpResponse('200')
+
+
+
 #vista que genera las tablas de precio en html para ser descargadas en forma de imagen
 @csrf_exempt
 def generar_tablas(request):
-    all_agriucltores = Agricultor.objects.all()
-    necesarias_agricolas = [] #lista de las tablas necesarias para precios agricultores (dadas por pares region producto)
-    necesarias_ganaderos = [] #lista de las tablas necesarias para precios ganaderos (dadas por pares region mercado)
-    for agricultor in all_agriucltores:
-        for region in agricultor.region_interes.all():
-            for producto in agricultor.productos.filter(tipo='agricola'):
-                nueva_region_producto = [region, producto]
-                if not nueva_region_producto in necesarias_agricolas:
-                    necesarias_agricolas.append(nueva_region_producto)
-            for mercado in Mercado.objects.filter(region=region, tipo='ganadero'):
-                nueva_region_mercado = [region,mercado]
-                if not nueva_region_mercado in necesarias_ganaderos and agricultor.productos.filter(tipo='ganadero').exists():
-                    necesarias_ganaderos.append(nueva_region_mercado)
-    all_data_precios_agricolas = []
-    all_data_precios_ganaderos =[]
-    ids = []
-    for region_producto in necesarias_agricolas:
-        data_precios_agricolas = get_data_precios_agicolas(region_producto[0], region_producto[1])
-        if len(data_precios_agricolas) > 0:
-            div_id = unidecode.unidecode("_".join((region_producto[0].nombre + ' ' + region_producto[1].nombre).lower().split()))
-            div_i = '<div id=' + div_id + ' style="overflow: hidden; width: 1080px;">'
-            div_f = '</div>'
-            all_data_precios_agricolas.append([region_producto[0], region_producto[1], data_precios_agricolas, [div_i,div_f]])
-            ids.append(div_id)
-    for region_mercado in necesarias_ganaderos:
-        data_precios_ganaderos = get_data_precios_ganaderos(region_mercado[1])
-        if len(data_precios_ganaderos) > 0:
-            div_id = unidecode.unidecode("_".join((region_mercado[0].nombre + ' ' + region_mercado[1].nombre).lower().split()))
-            div_i = '<div id=' + div_id + ' style="overflow: hidden; width: 1080px;">'
-            div_f = '</div>'
-            all_data_precios_ganaderos.append([region_mercado[1], data_precios_ganaderos, [div_i,div_f]])
-            ids.append(div_id)
-    context = {
-        'all_data_precios_agricolas' : all_data_precios_agricolas,
-        'all_data_precios_ganaderos' : all_data_precios_ganaderos,
-        'ids' : json.dumps(ids),
-    }
-    return render(request, 'app/generar_tablas.html', context)
+
+    if request.method=="POST":
+        path = settings.MEDIA_ROOT
+        try:
+            name = request.POST.get('name')
+            img = request.POST.get('image')
+
+            if not os.path.exists(f'{path}/tablas_precios'):
+                os.makedirs(f'{path}/tablas_precios')
+
+            
+            with open(f'{path}/tablas_precios/{name}', "wb") as fh:
+                        fh.write(base64.b64decode(img))
+            print(f'Se guardó imagen: {name}')
+
+        except Exception as e:
+            print('Error:')
+            print(e)
+            print('Fallaste wachin')
+
+            return HttpResponse('400')
+        
+        return HttpResponse('200')
+    else:
+        all_agriucltores = Agricultor.objects.all()
+        necesarias_agricolas = [] #lista de las tablas necesarias para precios agricultores (dadas por pares region producto)
+        necesarias_ganaderos = [] #lista de las tablas necesarias para precios ganaderos (dadas por pares region mercado)
+        for agricultor in all_agriucltores:
+            for region in agricultor.region_interes.all():
+                for producto in agricultor.productos.filter(tipo='agricola'):
+                    nueva_region_producto = [region, producto]
+                    if not nueva_region_producto in necesarias_agricolas:
+                        necesarias_agricolas.append(nueva_region_producto)
+                for mercado in Mercado.objects.filter(region=region, tipo='ganadero'):
+                    nueva_region_mercado = [region,mercado]
+                    if not nueva_region_mercado in necesarias_ganaderos and agricultor.productos.filter(tipo='ganadero').exists():
+                        necesarias_ganaderos.append(nueva_region_mercado)
+        all_data_precios_agricolas = []
+        all_data_precios_ganaderos =[]
+        ids = []
+        for region_producto in necesarias_agricolas:
+            data_precios_agricolas = get_data_precios_agicolas(region_producto[0], region_producto[1])
+            if len(data_precios_agricolas) > 0:
+                div_id = unidecode.unidecode("_".join((region_producto[0].nombre + ' ' + region_producto[1].nombre).lower().split()))
+                div_i = '<div id=' + div_id + ' style="overflow: hidden; width: 1080px;">'
+                div_f = '</div>'
+                all_data_precios_agricolas.append([region_producto[0], region_producto[1], data_precios_agricolas, [div_i,div_f]])
+                ids.append(div_id)
+        for region_mercado in necesarias_ganaderos:
+            data_precios_ganaderos = get_data_precios_ganaderos(region_mercado[1])
+            if len(data_precios_ganaderos) > 0:
+                div_id = unidecode.unidecode("_".join((region_mercado[0].nombre + ' ' + region_mercado[1].nombre).lower().split()))
+                div_i = '<div id=' + div_id + ' style="overflow: hidden; width: 1080px;">'
+                div_f = '</div>'
+                all_data_precios_ganaderos.append([region_mercado[1], data_precios_ganaderos, [div_i,div_f]])
+                ids.append(div_id)
+        context = {
+            'all_data_precios_agricolas' : all_data_precios_agricolas,
+            'all_data_precios_ganaderos' : all_data_precios_ganaderos,
+            'ids' : json.dumps(ids),
+        }
+        return render(request, 'app/generar_tablas.html', context)
 
 #funcion auxiliar que obtiene los precios de todas las variedades de un producto agricolas en los dintintos mercados de una region
 def get_data_precios_agicolas(a_region, a_producto):
+    hoy = datetime.now(pytz.timezone('America/Santiago')).date()
     mercados = Mercado.objects.filter(region=a_region)
     variedades = Variedad.objects.filter(producto=a_producto)
     lista_mercado_precios = []
     for a_mercado in mercados:
-        precios = Precio.objects.filter(mercado=a_mercado, variedad__in=variedades)
+        precios = Precio.objects.filter(mercado=a_mercado, variedad__in=variedades, fecha_subida=hoy)
         print(precios)
         if len(precios) > 0:
             lista_mercado_precios.append([a_mercado, precios])
@@ -170,7 +276,8 @@ def get_data_precios_agicolas(a_region, a_producto):
 
 #funcion auxiliar que obtiene los precios de todos los productos ganaderos en un mercado
 def get_data_precios_ganaderos(a_mercado):
-    precios = Precio.objects.filter(mercado=a_mercado)
+    hoy = datetime.now(pytz.timezone('America/Santiago')).date()
+    precios = Precio.objects.filter(mercado=a_mercado, fecha_subida=hoy)
     return precios
 #funcion auxiliar que obtiene los precios mas recientes de todos las variedades de productos
 # def get_latest_precios():

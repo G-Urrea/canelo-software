@@ -6,6 +6,7 @@
         <meta charset="utf-8">
         <title>CANELO</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
         <style>
             .fondoagricola {
                 background-image: url("{% static 'media/fondo_precios_agricolas.png' %}");
@@ -65,7 +66,13 @@
     <body>
         {% include 'app/navbar.html' %}
 
-        <button class="btn btn-primary" onclick="descargar_imagenes()">Descargar Imagenes</button>
+        <div style="text-align:center;padding:10px;">
+            <button class="btn btn-primary" onclick="descargar_imagenes()">Descargar Imagenes</button>
+        </div>
+        <div style="text-align:center;padding:10px;">
+            <button class="btn btn-primary" id="guardar_server" onclick="guardar_imagenes()">Guardar imagenes en servidor</button>
+        </div>
+        
 
         <div id="todas" style="overflow: hidden;"> 
             {% for region_producto in all_data_precios_agricolas %}
@@ -205,6 +212,7 @@
                     link.download = element.concat("_",date,"_",d.getMonth()+1,"_",year,".png");
                     link.href = canvas.toDataURL("image/png");
                     
+                    // Simular link de descarga
                     document.body.appendChild(link);
                     link.click();
 
@@ -212,7 +220,29 @@
                     delete link;
                 }); 
                 });
+            }
+            
+            function guardar_imagenes(){
+                ids.forEach(element =>
+                    html2canvas(document.querySelector("#".concat(element))).then(
+                        canvas => {
+                            let name = element.concat("_",date,"_",d.getMonth()+1,"_",year,".png");
+                            let img = canvas.toDataURL("image/png").replace(/^data:image\/(png|jpg);base64,/, "");
 
+                            $.ajax({
+                                type: "POST",
+                                url: "{% url 'generar_tablas' %}",
+                                data: { 
+                                "image": img,
+                                "name": name,
+                                csrfmiddlewaretoken: '{{ csrf_token }}'
+                            }             
+                                })
+                                .catch((e) => {
+                                    console.log(e);
+                                });
+                        })
+                    )
             }
 
 
