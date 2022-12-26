@@ -138,62 +138,49 @@
 
         async function procesar_tablas() {
             let ciudades  = {{lista_ciudades | safe}};
-            // Procesar tablas, convertirlas a imagen y guardarlas en lista
+            let autorizar = {{autorizar | safe}};
+            let hoy = {{fecha | safe}};
 
-           
-            let nombres = [];
-            let imagenes = [];
-            
-            let promesas = [];
-            let n = 5; // Resolver de a n promesas, para evitar problemas de memoria
-            // Sería más eficiente ir mandando las imagenes por tanda de promesas
-            // Si sobra tiempo se puede implementar en otro momento
-            for (let i=0; i<ciudades.length; i+=5){
-                let promesas_j = []
-                for (let j=i; (j<i+5 && j<ciudades.length) ; j++){
-                    promesas_j.push(html2canvas(document.getElementById(ciudades[j])));
-                }
+            let n = 10; // Resolver de a n promesas, para evitar problemas de memoria
+            for (let i=0; i<ciudades.length; i+=n){
+                let promesas_j = [];
+                let j=i;
+                let j_values = [];
+                while (promesas_j.length<n && j<ciudades.length){
+                    // Descargar sólo si se ha autorizado desde el backend
+                    if (autorizar[j]){
+                        j_values.push(j);
+                        promesas_j.push(html2canvas(document.getElementById(ciudades[j])));
+                        }
+                    j++;
+                } 
+                // Esperar que se resuelvan las promesas
                 await Promise.all(promesas_j);
-                promesas = promesas.concat(promesas_j);
-            }
-            
-            console.log(promesas);
-            for (let i=0; i<ciudades.length; i++){
-                let element = ciudades[i];
-                let canvas = await promesas[i];
+                // Añadir imagen con respectivo nombre 
+                for (let k=0; k<promesas_j.length; k++){
+                    let element = ciudades[j_values[k]];
+                    let canvas =  await promesas_j[k];
 
-                let nombre = "pronostico_".concat(element.replace('/','_')).concat(".png");
-                console.log("Generando pronostico de ".concat(element));
-                var img = canvas.toDataURL().replace(/^data:image\/(png|jpg);base64,/, "");
-                nombres.push(nombre);
-                imagenes.push(img);
-            }
+                    let nombre = "pronostico_".concat(element.replace('/','_'),"_",hoy, ".png");
 
-            let data = {'nombres': nombres, 'imagenes':imagenes};
-            return data;
-        }
+                    console.log("Generando pronostico de ".concat(element));
+                    let img = canvas.toDataURL().replace(/^data:image\/(png|jpg);base64,/, "");
 
-        async function guardar_imagenes_2(){
-            let ciudades  = {{lista_ciudades | safe}};
-            ciudades.forEach(element =>
-                    html2canvas(document.getElementById(element))).then(
-                        canvas => {
-                            let name = "pronostico_".concat(element.replace('/','_')).concat(".png");
-                            let img = canvas.toDataURL("image/png").replace(/^data:image\/(png|jpg);base64,/, "");
-
-                            $.ajax({
-                                type: "POST",
-                                url: "{% url 'generar_pronosticos' %}",
-                                data: { 
-                                "image": img,
-                                "name": name,
-                                csrfmiddlewaretoken: '{{ csrf_token }}'
-                            }             
-                                })
-                                .catch((e) => {
-                                    console.log(e);
-                                });
+                    $.ajax({
+                        type: "POST",
+                        url: "{% url 'generar_pronosticos' %}",
+                        data: { 
+                        "image": img,
+                        "name": nombre,
+                        csrfmiddlewaretoken: '{{ csrf_token }}'
+                    }             
+                        })
+                        .catch((e) => {
+                            console.log(e);
                         });
+                }
+            }
+
         }
 
         // Guarda imagenes en servidor
@@ -201,26 +188,11 @@
             let btn = document.getElementById("guardar_server");
             btn.innerHTML = 'Generando imagenes...';
 
-            let data = await procesar_tablas();
-            let imagenes = data['imagenes'];
-            let nombres = data['nombres']; 
-            for (let i=0; i<nombres.length; i++){
-                let imagen = imagenes[i];
-                let nombre = nombres[i];
-                $.ajax({
-                    type: "POST",
-                    url: "{% url 'generar_pronosticos' %}",
-                    data: { 
-                    "image": imagen,
-                    "name": nombre,
-                    csrfmiddlewaretoken: '{{ csrf_token }}'
-                }             
-                    })
-                    .catch((e) => {
-                        console.log(e);
-                    });
-            }
+            await procesar_tablas();
+
+            alert("Imagenes enviadas");
             btn.innerHTML = 'Guardar imagenes en servidor';
+            location.reload()
             
         }
 
@@ -231,7 +203,7 @@
             for (let i =0; i<ciudades.length; i++){
                 await html2canvas(document.getElementById(ciudades[i])).then( 
                     function (canvas) {                       
-                        let nombre = "pronostico_".concat(ciudades[i].replace('/','_')).concat(".png");
+                        let nombre = "pronostico_".concat(ciudades[i].replace('/','_'),".png");
                         console.log("Generando pronostico de ".concat(ciudades[i]));
                         img.file(nombre, canvas.toDataURL("image/png").replace(/^data:image\/(png|jpg);base64,/, ""),
                         {base64: true});                   

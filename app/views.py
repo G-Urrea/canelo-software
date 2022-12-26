@@ -123,6 +123,18 @@ def precios(request):
     }
     return render(request, 'app/precios.html', context)
 
+
+# Elimina elementos en path que no se han modificado hoy
+def eliminar_desactualizados(path):
+    hoy = datetime.now(pytz.timezone('America/Santiago')).date()
+    # Ver si hay imagenes creadas hoy, eliminar aquellas que no se han creado hoy
+    for p, _, files in os.walk(f'{path}'):
+        for name in files:
+            path_file = os.path.join(p, name)
+            fecha_modificacion = datetime.fromtimestamp((os.stat(path_file).st_mtime)).date()
+            if hoy != fecha_modificacion:
+                os.remove(path_file)
+
 @csrf_exempt
 def generar_pronosticos(request):
     # Archivo debe estar en path/media
@@ -131,20 +143,22 @@ def generar_pronosticos(request):
     if request.method == "GET":
         # Ver fecha
         hoy = datetime.now(pytz.timezone('America/Santiago')).date()
-        nombre_archivo = f"pronostico_{hoy}.csv"
+        nombre_archivo = f"pronostico.csv"
         
-
         # Generar df sólo una vez al día
         # Si no existe, se recopilan los datos
         if not os.path.exists(f'{path}/{nombre_archivo}'):
             df = pronosticos.get_pronosticos()
             df.to_csv(f'{path}/{nombre_archivo}', encoding='utf-8', index=False)
         else:
-            print('Estaba el archivo! :D')
-            df = pd.read_csv(f'{path}/{nombre_archivo}',encoding='utf-8')
-            df.fillna('', inplace=True)
-
-        print(default_storage.exists('static/media'))
+            if hoy == datetime.fromtimestamp((os.stat(f'{path}/{nombre_archivo}').st_mtime)).date():
+                print('Estaba actualizado! :D')
+                df = pd.read_csv(f'{path}/{nombre_archivo}',encoding='utf-8')
+                df.fillna('', inplace=True)
+            else:
+                # El archivo no estaba actualizado
+                df = pronosticos.get_pronosticos()
+                df.to_csv(f'{path}/{nombre_archivo}', encoding='utf-8', index=False)
     
     
         tables = pronosticos.get_tablas_pronostico(df)
@@ -153,6 +167,11 @@ def generar_pronosticos(request):
         # Verificar que están los iconos y si no, actualizarlos
         pronosticos.actualizar_imagenes(df, f'{path}/iconos_pronostico')
 
+
+        autorizar_descarga = []
+
+        lista_ciudades = []
+        hoy_str = hoy.strftime('%d_%m_%Y')
         for ciudad in tables:
 
             # Formatear temperatura para tablas
@@ -165,9 +184,28 @@ def generar_pronosticos(request):
             json_records = tables[ciudad].reset_index().to_json(orient ='records', force_ascii=False)
             data = json.loads(json_records)
             ciudades[ciudad] = data
-            context = {
+
+            nombre_imagen = f"pronostico_{ciudad.replace('/','_')}_{hoy_str}.png"
+
+            lista_ciudades.append(ciudad)
+
+            # Si existe la imagen
+            if os.path.exists(f'{path}/pronosticos/{nombre_imagen}'):
+                autorizar_descarga.append(False)
+            else:
+                autorizar_descarga.append(True)
+
+            
+
+        # Asegurarse que no hayan imagenes desactualizadas
+        eliminar_desactualizados(f'{path}/pronosticos')
+
+        # Verificar que haya imagenes 
+        context = {
                 'ciudades':ciudades,
-                'lista_ciudades': json.dumps(list(ciudades.keys()))
+                'lista_ciudades': json.dumps(lista_ciudades),
+                'fecha': json.dumps(hoy_str),
+                'autorizar' : json.dumps(autorizar_descarga)
                 }
         return render(request, 'app/generar_pronostico.html', context)
 
@@ -179,7 +217,6 @@ def generar_pronosticos(request):
 
             if not os.path.exists(f'{path}/pronosticos'):
                 os.makedirs(f'{path}/pronosticos')
-
             
             with open(f'{path}/pronosticos/{name}', "wb") as fh:
                         fh.write(base64.b64decode(img))
@@ -221,11 +258,18 @@ def generar_tablas(request):
             return HttpResponse('400')
         
         return HttpResponse('200')
-    else:
-        all_agriucltores = Agricultor.objects.all()
+    if request.method=="GET":
+        hoy = datetime.now(pytz.timezone('America/Santiago')).date()
+        hoy_str = hoy.strftime('%d_%m_%Y')
+
+        path = settings.MEDIA_ROOT
+        # Eliminar tablas de precios desactualizadas
+        eliminar_desactualizados(f'{path}/tablas_precios')
+
+        all_agricultores = Agricultor.objects.all()
         necesarias_agricolas = [] #lista de las tablas necesarias para precios agricultores (dadas por pares region producto)
         necesarias_ganaderos = [] #lista de las tablas necesarias para precios ganaderos (dadas por pares region mercado)
-        for agricultor in all_agriucltores:
+        for agricultor in all_agricultores:
             for region in agricultor.region_interes.all():
                 for producto in agricultor.productos.filter(tipo='agricola'):
                     nueva_region_producto = [region, producto]
@@ -254,10 +298,24 @@ def generar_tablas(request):
                 div_f = '</div>'
                 all_data_precios_ganaderos.append([region_mercado[1], data_precios_ganaderos, [div_i,div_f]])
                 ids.append(div_id)
+
+        # Revisar si imagenes fueron creadas:
+        autorizar = []
+
+        for id in ids:
+            nombre_imagen = f'{id}_{hoy_str}.png'
+            if os.path.exists(f'{path}/tablas_precios/{nombre_imagen}'):
+                autorizar.append(False)
+            else:
+                autorizar.append(True)
+
+
         context = {
             'all_data_precios_agricolas' : all_data_precios_agricolas,
             'all_data_precios_ganaderos' : all_data_precios_ganaderos,
             'ids' : json.dumps(ids),
+            'fecha': json.dumps(hoy_str),
+            'autorizar': json.dumps(autorizar)
         }
         return render(request, 'app/generar_tablas.html', context)
 
